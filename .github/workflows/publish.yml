@@ -55,14 +55,27 @@ jobs:
           echo "Commits analyzed:"
           echo "$COMMITS"
 
-      # Bump version locally (no commit to main — branch rules block that)
-      - name: Bump version
+      # Resolve version from latest git tag + bump type
+      # package.json is 0.0.0 — real version lives in git tags
+      - name: Compute next version
         id: version
         run: |
-          npm version ${{ steps.bump.outputs.type }} --no-git-tag-version
-          VERSION=$(node -p "require('./package.json').version")
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Publishing v${VERSION}"
+          LATEST_TAG=$(git tag --list 'v*' --sort=-v:refname | head -n1)
+          if [ -z "$LATEST_TAG" ]; then
+            LATEST_TAG="v0.0.0"
+          fi
+          CURRENT=${LATEST_TAG#v}
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+
+          if [ "${{ steps.bump.outputs.type }}" = "minor" ]; then
+            NEXT="${MAJOR}.$((MINOR + 1)).0"
+          else
+            NEXT="${MAJOR}.${MINOR}.$((PATCH + 1))"
+          fi
+
+          npm version "$NEXT" --no-git-tag-version
+          echo "version=${NEXT}" >> "$GITHUB_OUTPUT"
+          echo "Publishing v${NEXT} (was ${CURRENT}, bump=${{ steps.bump.outputs.type }})"
 
       - run: pnpm build
       - run: npm publish --provenance --access public
