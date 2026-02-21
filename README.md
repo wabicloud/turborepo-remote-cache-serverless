@@ -1,4 +1,4 @@
-# turborepo-remote-cache-serverless
+# @wabicloud/turborepo-remote-cache-serverless
 
 An AWS CDK construct that deploys a fully serverless Turborepo remote cache using S3, Lambda, and Secrets Manager. No servers to manage, scales to zero, costs almost nothing for small teams.
 
@@ -7,13 +7,13 @@ An AWS CDK construct that deploys a fully serverless Turborepo remote cache usin
 ### Install
 
 ```bash
-npm install turborepo-remote-cache-serverless
+npm install @wabicloud/turborepo-remote-cache-serverless
 ```
 
 ### Add to your CDK stack
 
 ```typescript
-import { TurborepoRemoteCache } from "turborepo-remote-cache-serverless";
+import { TurborepoRemoteCache } from "@wabicloud/turborepo-remote-cache-serverless";
 
 const cache = new TurborepoRemoteCache(this, "TurboCache");
 
@@ -31,7 +31,7 @@ cdk deploy
 ### Generate a token
 
 ```bash
-npx turborepo-remote-cache-serverless generate-token \
+npx wabicloud-turbo-cache generate-token \
   --team team_myproject \
   --secret-name turborepo/cache-token \
   --region us-east-1
@@ -74,7 +74,7 @@ Turborepo uses `--preflight` mode: it sends an OPTIONS request to get a presigne
 ## CLI Reference
 
 ```
-turborepo-remote-cache-serverless generate-token
+wabicloud-turbo-cache generate-token
 
 Flags:
   --team          Team ID (must start with "team_")       [required]
