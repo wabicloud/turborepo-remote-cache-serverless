@@ -1,6 +1,6 @@
 {
   "name": "@wabicloud/turborepo-remote-cache-serverless",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "AWS CDK construct for deploying a Turborepo remote cache backed by S3 and Lambda",
   "type": "module",
   "main": "./dist/index.cjs",
