@@ -83,6 +83,8 @@ pnpm turbo build
 | `expiration` | `Duration` | 30 days | How long cached artifacts are kept |
 | `secretName` | `string` | `turborepo-cache/token-secret` | Secrets Manager secret name |
 
+> **Note:** Changing `secretName` creates a new secret with a new signing key. All existing tokens will be invalidated and must be regenerated.
+
 ```typescript
 new TurborepoRemoteCache(this, "TurboCache", {
   expiration: cdk.Duration.days(7),
