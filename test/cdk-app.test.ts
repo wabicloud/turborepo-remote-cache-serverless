@@ -23,7 +23,7 @@ function synthCdkApp(envOverrides: Record<string, string> = {}) {
     expiration: cdk.Duration.days(
       Number(env.TURBO_CACHE_EXPIRATION || "30")
     ),
-    secretName: env.TURBO_CACHE_SECRET_NAME || "turborepo/cache-token",
+    secretName: env.TURBO_CACHE_SECRET_NAME || "turborepo-cache/token-secret",
   });
 
   new cdk.CfnOutput(stack, "FunctionUrl", { value: cache.functionUrl.url });
@@ -52,7 +52,7 @@ describe("CDK app entry point", () => {
   it("uses default values when env vars are not set", () => {
     const template = synthCdkApp();
     template.hasResourceProperties("AWS::SecretsManager::Secret", {
-      Name: "turborepo/cache-token",
+      Name: "turborepo-cache/token-secret",
     });
     template.hasResourceProperties("AWS::S3::Bucket", {
       LifecycleConfiguration: {

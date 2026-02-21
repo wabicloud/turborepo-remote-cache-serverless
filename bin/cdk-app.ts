@@ -17,7 +17,7 @@ const cache = new TurborepoRemoteCache(stack, "Cache", {
   expiration: cdk.Duration.days(
     Number(process.env.TURBO_CACHE_EXPIRATION || "30")
   ),
-  secretName: process.env.TURBO_CACHE_SECRET_NAME || "turborepo/cache-token",
+  secretName: process.env.TURBO_CACHE_SECRET_NAME || "turborepo-cache/token-secret",
 });
 
 new cdk.CfnOutput(stack, "FunctionUrl", { value: cache.functionUrl.url });

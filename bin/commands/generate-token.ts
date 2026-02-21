@@ -12,8 +12,8 @@ function usage(): never {
 
 Flags:
   --team         Team ID (must start with "team_"), e.g. team_myproject
-  --secret-name  Secrets Manager secret name (default: turborepo/cache-token)
-  --region       AWS region (default: us-east-1)
+  --secret-name  Secrets Manager secret name (default: turborepo-cache/token-secret)
+  --region       AWS region (default: eu-central-1)
 
 Uses the standard AWS credential chain (env vars, profiles, instance roles).
 Set AWS_PROFILE to use a named profile.`);
@@ -22,8 +22,8 @@ Set AWS_PROFILE to use a named profile.`);
 
 function parseArgs(argv: string[]) {
   let team: string | undefined;
-  let secretName = "turborepo/cache-token";
-  let region = "us-east-1";
+  let secretName = "turborepo-cache/token-secret";
+  let region = "eu-central-1";
 
   for (let i = 0; i < argv.length; i++) {
     switch (argv[i]) {
