@@ -10,10 +10,13 @@ jobs:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       id-token: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
 
       - uses: pnpm/action-setup@v4
         with:
@@ -27,5 +30,41 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
+
+      # Determine version bump from conventional commit prefixes
+      # feat: -> minor, everything else (fix:, chore:, etc.) -> patch
+      - name: Determine version bump
+        id: bump
+        run: |
+          # Get commits from the merged PR
+          COMMITS=$(git log --format='%s' ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} 2>/dev/null || echo "")
+
+          # If no commits found (e.g. squash merge), use the PR title
+          if [ -z "$COMMITS" ]; then
+            COMMITS="${{ github.event.pull_request.title }}"
+          fi
+
+          # Check for feat: prefix -> minor, otherwise patch
+          if echo "$COMMITS" | grep -qiE '^feat(\(.+\))?!?:'; then
+            echo "type=minor" >> "$GITHUB_OUTPUT"
+          else
+            echo "type=patch" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "Detected bump type: $(grep type "$GITHUB_OUTPUT" | cut -d= -f2)"
+          echo "Commits analyzed:"
+          echo "$COMMITS"
+
+      - name: Bump version
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          npm version ${{ steps.bump.outputs.type }} --no-git-tag-version
+          VERSION=$(node -p "require('./package.json').version")
+          git add package.json
+          git commit -m "chore: release v${VERSION}"
+          git tag "v${VERSION}"
+          git push origin main --tags
+
       - run: pnpm build
       - run: npm publish --provenance --access public
