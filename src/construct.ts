@@ -19,7 +19,7 @@ export interface TurborepoRemoteCacheProps {
 
   /**
    * Name of the Secrets Manager secret that stores the JWT signing key.
-   * @default 'turborepo/cache-token'
+   * @default 'turborepo-cache/token-secret'
    */
   readonly secretName?: string;
 }
@@ -43,7 +43,7 @@ export class TurborepoRemoteCache extends Construct {
 
     const {
       expiration = cdk.Duration.days(30),
-      secretName = "turborepo/cache-token",
+      secretName = "turborepo-cache/token-secret",
     } = props;
 
     // S3 Bucket for cache

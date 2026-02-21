@@ -19,7 +19,7 @@ function usage(): never {
 Flags:
   --region        AWS region (default: AWS SDK default chain)
   --stack-name    CloudFormation stack name (default: wabicloud-turbo-cache)
-  --secret-name   Secrets Manager secret name (default: turborepo/cache-token)
+  --secret-name   Secrets Manager secret name (default: turborepo-cache/token-secret)
   --expiration    Cache TTL in days (default: 30)
 
 Uses the standard AWS credential chain (env vars, profiles, instance roles).
@@ -30,7 +30,7 @@ Set AWS_PROFILE to use a named profile.`);
 function parseArgs(argv: string[]): DeployArgs {
   let region: string | undefined;
   let stackName = "wabicloud-turbo-cache";
-  let secretName = "turborepo/cache-token";
+  let secretName = "turborepo-cache/token-secret";
   let expiration = "30";
 
   for (let i = 0; i < argv.length; i++) {
@@ -79,7 +79,7 @@ export async function deploy(argv: string[]) {
   const identity = await stsClient.send(new GetCallerIdentityCommand({}));
   const account = identity.Account!;
   const resolvedRegion =
-    region || (await stsClient.config.region()) || "us-east-1";
+    region || (await stsClient.config.region()) || "eu-central-1";
 
   console.log(
     `\nDeploying to account ${account} in region ${resolvedRegion}...\n`
