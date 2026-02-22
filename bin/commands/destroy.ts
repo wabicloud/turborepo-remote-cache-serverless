@@ -1,8 +1,10 @@
 import { execFileSync } from "node:child_process";
 import { createInterface } from "node:readline";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
-declare const __dirname: string;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 interface DestroyArgs {
   region?: string;
@@ -60,7 +62,7 @@ async function confirm(message: string): Promise<boolean> {
 }
 
 function resolveCdkBin(): string {
-  return require.resolve("aws-cdk/bin/cdk");
+  return fileURLToPath(import.meta.resolve("aws-cdk/bin/cdk"));
 }
 
 function resolveCdkAppPath(): string {

@@ -1,16 +1,20 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { createInterface } from "node:readline";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { STSClient, GetCallerIdentityCommand } from "@aws-sdk/client-sts";
 
-declare const __dirname: string;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 interface DeployArgs {
   region?: string;
   stackName: string;
   secretName: string;
   expiration: string;
+  yes: boolean;
 }
 
 function usage(): never {
@@ -21,6 +25,7 @@ Flags:
   --stack-name    CloudFormation stack name (default: wabicloud-turbo-cache)
   --secret-name   Secrets Manager secret name (default: turborepo-cache/token-secret)
   --expiration    Cache TTL in days (default: 30)
+  --yes / -y      Skip diff confirmation and deploy immediately
 
 Uses the standard AWS credential chain (env vars, profiles, instance roles).
 Set AWS_PROFILE to use a named profile.`);
@@ -32,6 +37,7 @@ function parseArgs(argv: string[]): DeployArgs {
   let stackName = "wabicloud-turbo-cache";
   let secretName = "turborepo-cache/token-secret";
   let expiration = "30";
+  let yes = false;
 
   for (let i = 0; i < argv.length; i++) {
     switch (argv[i]) {
@@ -47,17 +53,31 @@ function parseArgs(argv: string[]): DeployArgs {
       case "--expiration":
         expiration = argv[++i];
         break;
+      case "--yes":
+      case "-y":
+        yes = true;
+        break;
       default:
         console.error(`Unknown flag: ${argv[i]}`);
         usage();
     }
   }
 
-  return { region, stackName, secretName, expiration };
+  return { region, stackName, secretName, expiration, yes };
+}
+
+function confirm(message: string): Promise<boolean> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(message, (answer) => {
+      rl.close();
+      resolve(answer.toLowerCase() === "y" || answer.toLowerCase() === "yes");
+    });
+  });
 }
 
 function resolveCdkBin(): string {
-  return require.resolve("aws-cdk/bin/cdk");
+  return fileURLToPath(import.meta.resolve("aws-cdk/bin/cdk"));
 }
 
 function resolveCdkAppPath(): string {
@@ -73,7 +93,7 @@ function runCdk(args: string[], env: Record<string, string>) {
 }
 
 export async function deploy(argv: string[]) {
-  const { region, stackName, secretName, expiration } = parseArgs(argv);
+  const { region, stackName, secretName, expiration, yes } = parseArgs(argv);
 
   const stsClient = new STSClient(region ? { region } : {});
   const identity = await stsClient.send(new GetCallerIdentityCommand({}));
@@ -100,14 +120,26 @@ export async function deploy(argv: string[]) {
     cdkEnv
   );
 
+  const cdkAppArgs = ["--app", `node ${cdkAppPath}`];
+
+  console.log("\n=== Resource Changes ===\n");
+  runCdk(["diff", ...cdkAppArgs], cdkEnv);
+
+  if (!yes) {
+    const confirmed = await confirm("\nProceed with deployment? (y/N) ");
+    if (!confirmed) {
+      console.log("Aborted.");
+      return;
+    }
+  }
+
   const outputsFile = join(tmpdir(), `turbo-cache-outputs-${Date.now()}.json`);
 
   console.log("\nDeploying wabicloud-turbo-cache...\n");
   runCdk(
     [
       "deploy",
-      "--app",
-      `node ${cdkAppPath}`,
+      ...cdkAppArgs,
       "--require-approval",
       "never",
       "--outputs-file",
@@ -126,7 +158,7 @@ export async function deploy(argv: string[]) {
       console.log(`  Secret Name:  ${stackOutputs.SecretName}`);
       console.log(`  Bucket:       ${stackOutputs.BucketName}`);
       console.log(
-        `\nNext: npx wabicloud-turbo-cache generate-token --team team_myproject --region ${resolvedRegion}\n`
+        `\nNext: npx @wabicloud/turborepo-remote-cache-serverless@latest generate-token --team team_myproject --region ${resolvedRegion}\n`
       );
     }
   } catch {

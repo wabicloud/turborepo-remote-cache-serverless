@@ -1,18 +1,46 @@
-# @wabicloud/turborepo-remote-cache-serverless
+# ☁️ Turborepo Remote Cache — Serverless on AWS
 
-An AWS CDK construct that deploys a fully serverless Turborepo remote cache using S3, Lambda, and Secrets Manager. No servers to manage, scales to zero, costs almost nothing for small teams.
+**Deploy your own Turborepo remote cache in under 2 minutes. One command. No servers. Your AWS account.**
+
+You love Turborepo but your infrastructure runs on AWS, not Vercel? This package deploys a fully serverless remote cache into your own AWS account — built on S3, Lambda, and Secrets Manager. No vendor lock-in, no extra SaaS subscriptions, just your existing AWS setup. It handles large monorepo artifacts without breaking a sweat and costs next to nothing for most teams.
+
+- 🚀 **One command deploy** — `npx @wabicloud/turborepo-remote-cache-serverless@latest deploy` and you're done
+- 🏗️ **Built for AWS teams** — uses services you already know and trust, works with your existing IAM profiles
+- 💰 **Pays for itself** — typically under $1/month, and the CI minutes you save will most likely more than cover it
+- 🔒 **Your data, your account** — artifacts stay in your own S3 bucket, no third-party access
+- 🔍 **Transparent** — shows a full resource diff before every deployment
 
 > **Important:** This cache requires Turborepo's `--preflight` mode. Without it, Turborepo will try to upload/download artifacts directly through the Lambda, which is not supported. See [Configure Turborepo](#configure-turborepo) below.
 
 ## Quick Start
 
-### Install
+### Option A: One-liner deployment (no CDK project needed)
+
+```bash
+npx @wabicloud/turborepo-remote-cache-serverless@latest deploy --region eu-central-1 --expiration 14
+```
+
+With a named AWS profile:
+
+```bash
+AWS_PROFILE=myprofile npx @wabicloud/turborepo-remote-cache-serverless@latest deploy --region eu-central-1 --expiration 14
+```
+
+This deploys the entire stack (S3, Lambda, Secrets Manager) into your AWS account. No CDK project required.
+
+To tear it down:
+
+```bash
+npx @wabicloud/turborepo-remote-cache-serverless@latest destroy
+```
+
+### Option B: CDK construct
+
+If you already have a CDK project and want to integrate the cache into your stack:
 
 ```bash
 npm install @wabicloud/turborepo-remote-cache-serverless
 ```
-
-### Add to your CDK stack
 
 ```typescript
 import { TurborepoRemoteCache } from "@wabicloud/turborepo-remote-cache-serverless";
@@ -24,8 +52,6 @@ new cdk.CfnOutput(this, "TurboCacheUrl", {
 });
 ```
 
-### Deploy
-
 ```bash
 cdk deploy
 ```
@@ -33,7 +59,7 @@ cdk deploy
 ### Generate a token
 
 ```bash
-npx @wabicloud/turborepo-remote-cache-serverless generate-token \
+AWS_PROFILE=myprofile npx @wabicloud/turborepo-remote-cache-serverless@latest generate-token \
   --team team_myproject \
   --region eu-central-1
 ```
@@ -106,6 +132,36 @@ Turborepo with `preflight: true` sends an OPTIONS request to get a presigned S3 
 
 ## CLI Reference
 
+All commands use the standard AWS credential chain. Set `AWS_PROFILE` to use a named profile.
+
+### `deploy`
+
+```
+wabicloud-turbo-cache deploy
+
+Flags:
+  --region        AWS region                               [default: SDK default chain]
+  --stack-name    CloudFormation stack name                 [default: wabicloud-turbo-cache]
+  --secret-name   Secrets Manager secret name              [default: turborepo-cache/token-secret]
+  --expiration    Cache TTL in days                        [default: 30]
+  --yes / -y      Skip diff confirmation and deploy immediately
+```
+
+Shows a full resource diff before deploying and asks for confirmation. Use `--yes` to skip (e.g. in CI). Re-run with different flags to update an existing stack (e.g. `--expiration 30`).
+
+### `destroy`
+
+```
+wabicloud-turbo-cache destroy
+
+Flags:
+  --region        AWS region                               [default: SDK default chain]
+  --stack-name    CloudFormation stack name                 [default: wabicloud-turbo-cache]
+  --yes / -y      Skip confirmation prompt
+```
+
+### `generate-token`
+
 ```
 wabicloud-turbo-cache generate-token
 
@@ -114,8 +170,6 @@ Flags:
   --secret-name   Secrets Manager secret name              [default: turborepo-cache/token-secret]
   --region        AWS region                               [default: eu-central-1]
 ```
-
-Uses the standard AWS credential chain. Set `AWS_PROFILE` for named profiles.
 
 ## Exposed Properties
 
