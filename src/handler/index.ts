@@ -8,26 +8,39 @@ import {
   SecretsManagerClient,
   GetSecretValueCommand,
 } from "@aws-sdk/client-secrets-manager";
-import { fromNodeProviderChain } from "@aws-sdk/credential-providers";
 import * as jose from "jose";
 
 const s3 = new S3Client({});
 const secretsManager = new SecretsManagerClient({});
 
-const BUCKET = process.env.CACHE_BUCKET!;
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`Missing required environment variable: ${name}`);
+  return value;
+}
+
+const BUCKET = requireEnv("CACHE_BUCKET");
 const REGION = process.env.AWS_REGION || "eu-central-1";
-const JWT_SECRET_ARN = process.env.TURBO_TOKEN_SECRET_ARN!;
+const JWT_SECRET_ARN = requireEnv("TURBO_TOKEN_SECRET_ARN");
 const PRESIGN_EXPIRY = 3600; // 1 hour
+const SECRET_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const LOG_ENABLED = process.env.LOG_REQUESTS === "true";
 
 let cachedJwtSecret: string | null = null;
+let cacheExpiresAt = 0;
 
 async function getJwtSecret(): Promise<string> {
-  if (cachedJwtSecret) return cachedJwtSecret;
+  if (cachedJwtSecret && Date.now() < cacheExpiresAt) {
+    return cachedJwtSecret;
+  }
 
   const response = await secretsManager.send(
     new GetSecretValueCommand({ SecretId: JWT_SECRET_ARN })
   );
-  cachedJwtSecret = response.SecretString!;
+  const secret = response.SecretString;
+  if (!secret) throw new Error("JWT secret is empty in Secrets Manager");
+  cachedJwtSecret = secret;
+  cacheExpiresAt = Date.now() + SECRET_CACHE_TTL_MS;
   return cachedJwtSecret;
 }
 
@@ -57,7 +70,7 @@ async function generatePresignedUrl(
   teamId: string
 ): Promise<string> {
   const presigner = new S3RequestPresigner({
-    credentials: fromNodeProviderChain(),
+    credentials: await s3.config.credentials(),
     region: REGION,
     sha256: Hash.bind(null, "sha256"),
   });
@@ -76,7 +89,12 @@ async function generatePresignedUrl(
   // Remove slug from URL - Turborepo will append it
   // formatUrl sorts alphabetically: slug comes after all X-Amz-* params
   const urlStr = formatUrl(signedUrl);
-  return urlStr.replace("&slug=" + encodeURIComponent(teamId), "");
+  const slugParam = "&slug=" + encodeURIComponent(teamId);
+  const cleaned = urlStr.replace(slugParam, "");
+  if (cleaned === urlStr) {
+    throw new Error("Failed to strip slug parameter from presigned URL");
+  }
+  return cleaned;
 }
 
 interface LambdaEvent {
@@ -100,6 +118,10 @@ interface LambdaResponse {
 export const handler = async (event: LambdaEvent): Promise<LambdaResponse> => {
   const { method, path } = event.requestContext.http;
 
+  if (LOG_ENABLED) {
+    console.log(`${method} ${path}`);
+  }
+
   // Status endpoint - no auth required
   if (method === "GET" && path === "/v8/artifacts/status") {
     return {
@@ -114,7 +136,7 @@ export const handler = async (event: LambdaEvent): Promise<LambdaResponse> => {
   }
 
   // Artifact endpoints: /v8/artifacts/{hash}
-  const artifactMatch = path.match(/^\/v8\/artifacts\/([a-f0-9]+)$/);
+  const artifactMatch = path.match(/^\/v8\/artifacts\/([a-fA-F0-9]+)$/);
   if (!artifactMatch) {
     return { statusCode: 404, body: "Not found" };
   }
@@ -127,7 +149,8 @@ export const handler = async (event: LambdaEvent): Promise<LambdaResponse> => {
   try {
     const decoded = await authenticate(authHeader, jwtSecret);
     teamId = decoded.teamId;
-  } catch {
+  } catch (e) {
+    console.warn("Auth failed:", { path, error: (e as Error).message });
     return { statusCode: 401, body: "Unauthorized" };
   }
 
@@ -154,31 +177,37 @@ export const handler = async (event: LambdaEvent): Promise<LambdaResponse> => {
         ) {
           return { statusCode: 404, body: "Not found" };
         }
+        console.warn("S3 HeadObject error:", { key, error: (e as Error).message });
         throw e;
       }
     }
 
     if (requestedMethod === "GET" || requestedMethod === "PUT") {
-      const presignedUrl = await generatePresignedUrl(
-        requestedMethod,
-        key,
-        teamId
-      );
+      try {
+        const presignedUrl = await generatePresignedUrl(
+          requestedMethod,
+          key,
+          teamId
+        );
 
-      return {
-        statusCode: 200,
-        headers: {
-          location: presignedUrl,
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, PUT, OPTIONS",
-          // IMPORTANT: Do NOT include "Authorization" here!
-          // Turborepo checks this header and if Authorization is allowed,
-          // it sends the Auth header to the presigned S3 URL, causing 400 errors
-          "Access-Control-Allow-Headers":
-            "Content-Type, User-Agent, x-artifact-duration, x-artifact-tag",
-        },
-        body: "",
-      };
+        return {
+          statusCode: 200,
+          headers: {
+            location: presignedUrl,
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, PUT, OPTIONS",
+            // IMPORTANT: Do NOT include "Authorization" here!
+            // Turborepo checks this header and if Authorization is allowed,
+            // it sends the Auth header to the presigned S3 URL, causing 400 errors
+            "Access-Control-Allow-Headers":
+              "Content-Type, User-Agent, x-artifact-duration, x-artifact-tag",
+          },
+          body: "",
+        };
+      } catch (e) {
+        console.error("Presign failed:", { method: requestedMethod, key, error: (e as Error).message });
+        throw e;
+      }
     }
 
     return { statusCode: 404, body: "Not found" };

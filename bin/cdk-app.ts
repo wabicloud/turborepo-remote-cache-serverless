@@ -19,6 +19,10 @@ const cache = new TurborepoRemoteCache(stack, "Cache", {
     Number(process.env.TURBO_CACHE_EXPIRATION || "30")
   ),
   secretName: process.env.TURBO_CACHE_SECRET_NAME || "turborepo-cache/token-secret",
+  reservedConcurrency: process.env.TURBO_CACHE_RESERVED_CONCURRENCY
+    ? Number(process.env.TURBO_CACHE_RESERVED_CONCURRENCY)
+    : undefined,
+  logRequests: process.env.TURBO_CACHE_LOG_REQUESTS === "true",
 });
 
 new cdk.CfnOutput(stack, "FunctionUrl", { value: cache.functionUrl.url });

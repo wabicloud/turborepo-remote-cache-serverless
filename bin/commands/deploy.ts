@@ -14,6 +14,8 @@ interface DeployArgs {
   stackName: string;
   secretName: string;
   expiration: string;
+  reservedConcurrency?: string;
+  logRequests: boolean;
   yes: boolean;
 }
 
@@ -25,6 +27,8 @@ Flags:
   --stack-name    CloudFormation stack name (default: wabicloud-turbo-cache)
   --secret-name   Secrets Manager secret name (default: turborepo-cache/token-secret)
   --expiration    Cache TTL in days (default: 30)
+  --reserved-concurrency   Max concurrent Lambda executions (default: no limit)
+  --log-requests  Request logging in CloudWatch: on or off (default: off)
   --yes / -y      Skip diff confirmation and deploy immediately
 
 Uses the standard AWS credential chain (env vars, profiles, instance roles).
@@ -37,6 +41,8 @@ function parseArgs(argv: string[]): DeployArgs {
   let stackName = "wabicloud-turbo-cache";
   let secretName = "turborepo-cache/token-secret";
   let expiration = "30";
+  let reservedConcurrency: string | undefined;
+  let logRequests = false;
   let yes = false;
 
   for (let i = 0; i < argv.length; i++) {
@@ -53,6 +59,18 @@ function parseArgs(argv: string[]): DeployArgs {
       case "--expiration":
         expiration = argv[++i];
         break;
+      case "--reserved-concurrency":
+        reservedConcurrency = argv[++i];
+        break;
+      case "--log-requests": {
+        const val = argv[++i];
+        if (val !== "on" && val !== "off") {
+          console.error("Error: --log-requests must be 'on' or 'off'");
+          process.exit(1);
+        }
+        logRequests = val === "on";
+        break;
+      }
       case "--yes":
       case "-y":
         yes = true;
@@ -63,7 +81,21 @@ function parseArgs(argv: string[]): DeployArgs {
     }
   }
 
-  return { region, stackName, secretName, expiration, yes };
+  const expirationDays = Number(expiration);
+  if (!Number.isInteger(expirationDays) || expirationDays < 1) {
+    console.error("Error: --expiration must be a positive integer (days)");
+    process.exit(1);
+  }
+
+  if (reservedConcurrency !== undefined) {
+    const rc = Number(reservedConcurrency);
+    if (!Number.isInteger(rc) || rc < 1) {
+      console.error("Error: --reserved-concurrency must be a positive integer");
+      process.exit(1);
+    }
+  }
+
+  return { region, stackName, secretName, expiration, reservedConcurrency, logRequests, yes };
 }
 
 function confirm(message: string): Promise<boolean> {
@@ -93,7 +125,7 @@ function runCdk(args: string[], env: Record<string, string>) {
 }
 
 export async function deploy(argv: string[]) {
-  const { region, stackName, secretName, expiration, yes } = parseArgs(argv);
+  const { region, stackName, secretName, expiration, reservedConcurrency, logRequests, yes } = parseArgs(argv);
 
   const stsClient = new STSClient(region ? { region } : {});
   const identity = await stsClient.send(new GetCallerIdentityCommand({}));
@@ -112,6 +144,8 @@ export async function deploy(argv: string[]) {
     TURBO_CACHE_STACK_NAME: stackName,
     TURBO_CACHE_SECRET_NAME: secretName,
     TURBO_CACHE_EXPIRATION: expiration,
+    ...(reservedConcurrency ? { TURBO_CACHE_RESERVED_CONCURRENCY: reservedConcurrency } : {}),
+    ...(logRequests ? { TURBO_CACHE_LOG_REQUESTS: "true" } : {}),
   };
 
   console.log("Bootstrapping CDK toolkit (first-time only)...\n");
