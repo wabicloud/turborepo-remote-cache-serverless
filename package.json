@@ -19,7 +19,8 @@
     }
   },
   "bin": {
-    "wabicloud-turbo-cache": "./dist/cli.js"
+    "wabicloud-turbo-cache": "./dist/cli.js",
+    "turborepo-remote-cache-serverless": "./dist/cli.js"
   },
   "files": [
     "dist"

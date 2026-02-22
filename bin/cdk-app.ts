@@ -6,6 +6,7 @@ const stack = new cdk.Stack(
   app,
   process.env.TURBO_CACHE_STACK_NAME || "wabicloud-turbo-cache",
   {
+    description: "WABI Cloud - Serverless Turborepo remote cache (S3 + Lambda + Secrets Manager) - https://github.com/wabicloud/turborepo-remote-cache-serverless",
     env: {
       account: process.env.CDK_DEFAULT_ACCOUNT,
       region: process.env.CDK_DEFAULT_REGION,

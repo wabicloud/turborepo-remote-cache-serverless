@@ -47,7 +47,7 @@ export class TurborepoRemoteCache extends Construct {
     } = props;
 
     // S3 Bucket for cache
-    this.bucket = new s3.Bucket(this, "CacheBucket", {
+    this.bucket = new s3.Bucket(this, "Bucket", {
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       lifecycleRules: [{ expiration }],
@@ -74,6 +74,7 @@ export class TurborepoRemoteCache extends Construct {
 
     // Lambda Function
     const cacheHandler = new lambda.Function(this, "CacheHandler", {
+      description: "Turborepo remote cache API - handles auth and S3 presigned URLs",
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: "index.handler",
       code: lambda.Code.fromAsset(join(__dirname, "handler")),
