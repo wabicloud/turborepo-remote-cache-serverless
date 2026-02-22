@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { createInterface } from "node:readline";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { STSClient, GetCallerIdentityCommand } from "@aws-sdk/client-sts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -72,9 +73,19 @@ function resolveCdkAppPath(): string {
 export async function destroy(argv: string[]) {
   const { region, stackName, yes } = parseArgs(argv);
 
+  const stsClient = new STSClient(region ? { region } : {});
+  const identity = await stsClient.send(new GetCallerIdentityCommand({}));
+  const account = identity.Account!;
+  const resolvedRegion =
+    region || (await stsClient.config.region()) || "eu-central-1";
+
+  console.log(
+    `\nAccount: ${account}, Region: ${resolvedRegion}`
+  );
+
   if (!yes) {
     const confirmed = await confirm(
-      `Are you sure you want to destroy stack "${stackName}"? (y/N) `
+      `\nThis will permanently delete stack "${stackName}" including all cached artifacts. Continue? (y/N) `
     );
     if (!confirmed) {
       console.log("Aborted.");
@@ -86,10 +97,9 @@ export async function destroy(argv: string[]) {
   const cdkAppPath = resolveCdkAppPath();
   const cdkEnv: Record<string, string> = {
     TURBO_CACHE_STACK_NAME: stackName,
+    CDK_DEFAULT_ACCOUNT: account,
+    CDK_DEFAULT_REGION: resolvedRegion,
   };
-  if (region) {
-    cdkEnv.CDK_DEFAULT_REGION = region;
-  }
 
   console.log(`\nDestroying stack "${stackName}"...\n`);
 

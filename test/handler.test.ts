@@ -7,8 +7,16 @@ const headObjectMock = vi.fn();
 const getSecretValueMock = vi.fn();
 const presignMock = vi.fn();
 
+const credentialsMock = vi.fn().mockResolvedValue({
+  accessKeyId: "test",
+  secretAccessKey: "test",
+});
+
 vi.mock("@aws-sdk/client-s3", () => ({
-  S3Client: vi.fn().mockImplementation(() => ({ send: headObjectMock })),
+  S3Client: vi.fn().mockImplementation(() => ({
+    send: headObjectMock,
+    config: { credentials: credentialsMock },
+  })),
   HeadObjectCommand: vi.fn().mockImplementation((input) => input),
 }));
 
@@ -23,10 +31,6 @@ vi.mock("@aws-sdk/s3-request-presigner", () => ({
   S3RequestPresigner: vi.fn().mockImplementation(() => ({
     presign: presignMock,
   })),
-}));
-
-vi.mock("@aws-sdk/credential-providers", () => ({
-  fromNodeProviderChain: vi.fn(),
 }));
 
 vi.mock("@smithy/hash-node", () => ({

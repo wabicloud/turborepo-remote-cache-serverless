@@ -22,6 +22,19 @@ export interface TurborepoRemoteCacheProps {
    * @default 'turborepo-cache/token-secret'
    */
   readonly secretName?: string;
+
+  /**
+   * Maximum concurrent Lambda executions. Limits runaway costs from abuse.
+   * Must leave at least 10 unreserved concurrent executions in your account.
+   * @default - no reservation (uses unreserved account concurrency)
+   */
+  readonly reservedConcurrency?: number;
+
+  /**
+   * Enable request logging (method, team, hash) for each presigned URL.
+   * @default false
+   */
+  readonly logRequests?: boolean;
 }
 
 export class TurborepoRemoteCache extends Construct {
@@ -44,6 +57,8 @@ export class TurborepoRemoteCache extends Construct {
     const {
       expiration = cdk.Duration.days(30),
       secretName = "turborepo-cache/token-secret",
+      reservedConcurrency,
+      logRequests = false,
     } = props;
 
     // S3 Bucket for cache
@@ -80,9 +95,11 @@ export class TurborepoRemoteCache extends Construct {
       code: lambda.Code.fromAsset(join(__dirname, "handler")),
       memorySize: 1024,
       timeout: cdk.Duration.seconds(30),
+      reservedConcurrentExecutions: reservedConcurrency,
       environment: {
         CACHE_BUCKET: this.bucket.bucketName,
         TURBO_TOKEN_SECRET_ARN: this.secret.secretArn,
+        ...(logRequests ? { LOG_REQUESTS: "true" } : {}),
       },
     });
 
